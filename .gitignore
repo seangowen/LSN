@@ -1,0 +1,26 @@
+# OS-specific
+Thumbs.db
+Desktop.ini
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.env
+venv/
+
+# Jupyter Notebook
+.ipynb_checkpoints/
+
+# macOS system files
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Thumbnails
+._*
+
+
+# Selective ignore
+Exercise*
