@@ -1,0 +1,21 @@
+0.2
+1.8
+10000
+100
+0.8
+0.60
+5
+5
+
+  ReadInput >> x0;
+  ReadInput >> delta;
+  ReadInput >> n_steps;
+  ReadInput >> n_blocks;
+  ReadInput >> mu;
+  ReadInput >> sigma;
+  ReadInput >> iprint;
+  ReadInput >> imeasure;
+
+
+Input file for wavefunction sampling
+
