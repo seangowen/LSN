@@ -1,0 +1,79 @@
+#include <fstream>
+#include <string>
+#include <iostream>
+#include "blockedStatistics.h"
+#include "random.h"
+#include "measure.h"
+
+using namespace std;
+
+
+
+
+BlockedStatistics::BlockedStatistics(){ _rnd.Init(); };
+
+BlockedStatistics::~BlockedStatistics(){};
+
+
+void BlockedStatistics::blocking(int M, int N, Measure *measure, string filename)
+{
+  ofstream out;
+  int L = M/N;
+  out.open(filename, ios::out | ios::trunc);
+  int dim = measure->get_dimension();
+  vector<double> sum(dim,0);
+  vector<double> sum2(dim,0);
+
+  for(int i=0; i<N; i++)
+  {
+    if(i%10==0) cout << "Running block " << i+1 << "/100" << endl;
+    vector<double> meas(dim,0);
+    for(int k=0; k<L; k++)
+    {
+      vector<double> onethrow = measure->get_measure();
+      for(int j=0; j<dim; j++) meas.at(j) += onethrow.at(j);
+    }
+    for(int j=0; j<dim; j++)
+    {
+      sum.at(j)+=meas.at(j)/L;
+      sum2.at(j)+=(meas.at(j)/L)*(meas.at(j)/L);
+      out << sum.at(j)/(i+1) << "   " << error(sum.at(j)/(i+1), sum2.at(j)/(i+1), i) << "   ";
+    }
+    out << endl;
+  }
+  out.close();
+  return;
+}
+
+
+double BlockedStatistics::uniform_sampling(int min, int max)
+{
+  return _rnd.Rannyu(min,max);
+}
+
+double BlockedStatistics::error(double val, double val2, unsigned int k)
+{
+  if(k==0) return 0;
+  else return sqrt((val2-val*val)/k);
+};
+
+
+double BlockedStatistics::mean(vector<double> vec)
+{
+  int sum = 0;
+  for (unsigned int i=0; i<vec.size(); i++) sum+=vec.at(i);
+  return sum/vec.size();
+}
+
+double BlockedStatistics::chisquared(vector<double> vec, double EV, bool approx)
+{
+  double chiq=0;
+  if(approx==true)
+  {
+    for(unsigned int i=0; i<vec.size(); i++)
+    {
+      chiq+=pow((vec.at(i)-EV),2)/EV;
+    }
+  }
+  return chiq;
+}
