@@ -1,0 +1,554 @@
+/****************************************************************
+*****************************************************************
+    _/    _/  _/_/_/  _/       Numerical Simulation Laboratory
+   _/_/  _/ _/       _/       Physics Department
+  _/  _/_/    _/    _/       Universita' degli Studi di Milano
+ _/    _/       _/ _/       Prof. D.E. Galli
+_/    _/  _/_/_/  _/_/_/_/ email: Davide.Galli@unimi.it
+*****************************************************************
+*****************************************************************/
+#include <stdlib.h>     
+#include <iostream>     
+#include <fstream> 
+#include <string>
+#include <vector>
+#include <numeric>
+#include <algorithm>
+#include <iomanip>
+#include <stdio.h>
+#include <cmath>
+#include "MolDyn_NVE_new.h"
+
+using namespace std;
+
+int main()
+{
+
+  // ========= Initialization and Equilibration =======
+  cout << endl;
+  cout << "========= EX.4.1 : Running Initialization and Equilibration routine =========" << endl;
+  cout << endl;
+
+  int M = 5000;       // steps
+  int N = 100;        // blocks
+  int Nequi = 1000;   // equilibration steps
+
+  double T_i = 0.8;
+  double T_f = 0.8;
+  int Nrescales = 4;
+
+  string blocked_stats_path = "./../Results/blocked_stats_4.1.dat";
+
+  string routine = "4_1";
+
+  Input();
+  if(restart=="true") Equilibrate_system(Nequi, T_i, T_f, Nrescales, routine);
+  blocking_on_MD(M, N, blocked_stats_path, routine);
+  ConfFinal();
+
+
+  // =============== Blocking method ===================
+
+  cout << endl;
+  cout << "========= EX.4.2 : Computing avg. Macroscopic Quantities and error ========= " << endl;
+  cout << endl;
+  M = 1e4;
+  N = 100;
+  blocked_stats_path = "./../Results/blocked_stats_4.2.dat";
+
+  routine = "4_2";
+
+  Equilibrate_system(5000, T_i, T_f, Nrescales, routine);
+  Input();
+  blocking_on_MD(M, N, blocked_stats_path, routine);
+  ConfFinal();
+
+
+
+  return 0;
+}
+
+
+// ================ Initialization =================
+
+
+void Input(void) //Prepare all stuff for the simulation
+{ 
+  ifstream ReadInput,ReadConf, ReadOld;
+  ofstream SaveConf;
+  double ep, ek, pr, et, vir;
+
+  seed = 1;    //Set seed for random numbers
+  srand(seed); //Initialize random number generator
+  ReadInput.open("input.dat"); //Read input
+
+  ReadInput >> temp;
+  ReadInput >> npart;
+  ReadInput >> rho;
+  vol = (double)npart/rho;
+  box = pow(vol,1.0/3.0);
+  ReadInput >> rcut;
+  ReadInput >> delta;
+  ReadInput >> nstep;
+  ReadInput >> restart;
+
+  if(restart=="false")
+  {
+    cout << "------------- (restart == false) ----------------- " << endl;
+    cout << endl;
+    cout << "Classic Lennard-Jones fluid        " << endl;
+    cout << "Molecular dynamics simulation in NVE ensemble  " << endl << endl;
+    cout << "Interatomic potential v(r) = 4 * [(1/r)^12 - (1/r)^6]" << endl << endl;
+    cout << "The program uses Lennard-Jones units " << endl;
+    cout << "Number of particles = " << npart << endl;
+    cout << "Density of particles = " << rho << endl;
+    cout << "Volume of the simulation box = " << vol << endl;
+    cout << "Edge of the simulation box = " << box << endl;
+    cout << "The program integrates Newton equations with the Verlet method " << endl;
+    cout << "Time step = " << delta << endl;
+    cout << "Number of steps = " << nstep << endl << endl;
+  }
+  ReadInput.close();
+
+//Prepare array for measurements
+  iv = 0; //Potential energy
+  ik = 1; //Kinetic energy
+  ie = 2; //Total energy
+  it = 3; //Temperature
+  n_props = 4; //Number of observables
+
+//Read r(t) positions
+
+  if(restart=="true")
+  {
+    cout << "------------- (restart == true) ----------------- " << endl;
+    cout << "Reading initial configurations from file config.0 " << endl;
+    cout << "Saving a \"previous step\" config. r(t-dt) into old.0" << endl;
+    cout << "Preparing random velocities with center of mass velocity equal to zero " << endl;
+
+    ReadConf.open("config.0");
+    for (int i=0; i<npart; ++i)
+    {
+      ReadConf >> x[i] >> y[i] >> z[i];
+      x[i] = x[i] * box;
+      y[i] = y[i] * box;
+      z[i] = z[i] * box;
+    }
+    ReadConf.close();
+
+    SaveConf.open("old.0", ios::out | ios::trunc);
+    //Prepare initial velocities
+
+    double sumv[3] = {0.0, 0.0, 0.0};
+    for (int i=0; i<npart; ++i)
+    {
+      vx[i] = rand()/double(RAND_MAX) - 0.5;
+      vy[i] = rand()/double(RAND_MAX) - 0.5;
+      vz[i] = rand()/double(RAND_MAX) - 0.5;
+
+      sumv[0] += vx[i];
+      sumv[1] += vy[i];
+      sumv[2] += vz[i];
+    }
+    for (int idim=0; idim<3; ++idim) sumv[idim] /= (double)npart;
+    double sumv2 = 0.0, fs;
+    for (int i=0; i<npart; ++i)
+    {
+      vx[i] = vx[i] - sumv[0];
+      vy[i] = vy[i] - sumv[1];
+      vz[i] = vz[i] - sumv[2];
+
+      sumv2 += vx[i]*vx[i] + vy[i]*vy[i] + vz[i]*vz[i];
+    }
+    sumv2 /= (double)npart;
+
+    fs = sqrt(3 * temp / sumv2);   // fs = velocity scale factor
+    for (int i=0; i<npart; ++i){
+      vx[i] *= fs;
+      vy[i] *= fs;
+      vz[i] *= fs;
+
+      xold[i] = Pbc(x[i] - vx[i] * delta);
+      yold[i] = Pbc(y[i] - vy[i] * delta);
+      zold[i] = Pbc(z[i] - vz[i] * delta);
+      SaveConf << xold[i]/box << "  " << yold[i]/box << "  " << zold[i]/box << endl;
+    }
+    SaveConf.close();
+
+  } 
+
+  else if (restart=="false")
+  {
+    
+    cout << "Opening config.final and using it for defining r(t)" << endl;
+
+    ReadOld.open("old.final");      // r(t-dt)
+    ReadConf.open("config.final");  // r(t)
+
+    for (int i=0; i<npart; ++i)
+    {
+      ReadOld  >> xold[i] >> yold[i] >> zold[i];
+      ReadConf >> x[i] >> y[i] >> z[i];
+      xold[i] = xold[i] * box;
+      yold[i] = yold[i] * box;
+      zold[i] = zold[i] * box;
+      x[i] = x[i]*box;
+      y[i] = y[i]*box;
+      z[i] = z[i]*box;
+    }
+    ReadConf.close();
+    ReadOld.close();
+  }
+
+  return;
+}
+
+// ================ Equilibration =================
+
+void Equilibrate_system(int N, double T_i, double T_f, int N_resc, string routine){
+
+  cout << "" << endl;
+  cout << "------------------------------------------------------------------------" << endl;
+  cout << "Equilibration phase. Running " << N << " steps to equilibrate the system" << endl;
+  cout << "" << endl;
+
+  int irescale = int(N/N_resc);
+
+  int hist_dimension = 100;
+  int hist_count     = 0;
+  vector<double> mean_v2_history;
+
+  for(int i=0; i<N; i++)
+  {
+
+    Move();
+    if(hist_count > (irescale)-100) mean_v2_history.push_back(eval_mean_v2());
+
+    if((i+1)%(irescale)==0)
+    {
+      // Un-comment lines below for debugging
+      //cout << "Thermalization process is running, step " << i+1 << "/" << N << ". Rescaling velocities." << endl;
+      //cout << "The kinetic energy is evaluated using the last" << mean_v2_history.size() << " istant measures." << endl;
+      double progress = double(i + 1) / N;
+      printProgressBar(progress);           // Nice progress bar
+
+      rescale_velocities(mean_v2_history);
+      mean_v2_history.clear();
+      hist_count = 0;
+    }
+    if(i%10==0) Measure(true, routine);
+    hist_count++;
+
+  }
+  cout << endl; // Prevents the progress bar to vanish
+  set_restart("true","false");
+  cout << "Equilibration Phase Ended. Starting Verlet algorithm " << endl;
+  cout << "-----------------------------------------------------" << endl;
+
+  ConfFinal();
+
+  return;
+}
+
+// Resetting "restart" value to "false"
+void set_restart(string current, string new_val){
+  string strReplace = current;
+  string strNew = new_val;
+  ifstream filein("input.dat");
+  ofstream fileout("input.temp");
+
+  while(!filein.eof()){
+    string temp;
+    filein >> temp;
+    if(temp==current) fileout << new_val << endl;
+    else fileout << temp << endl;
+  }
+  rename("input.temp", "input.dat");
+}
+
+
+// ====================== BLOCKING METHOD =========================
+
+void blocking_on_MD(int M, int N, string blocked_stats_path, string routine){
+
+  ofstream out;
+  int L = M/N;
+  //out.open(filename, ios::out | ios::trunc);
+  out.open(blocked_stats_path, ios::out | ios::trunc);
+  vector<double> sum(n_props,0);        // n_props index for n_props-dim measures
+  vector<double> sum2(n_props,0);
+
+  cout << "Starting simulation with blocking. " << endl;
+  for(unsigned int i=0; i<N; i++)
+  {
+    // Uncomment for debugging
+    //if((i)%1==0) cout << "Running block " << i << " of " << N << endl;
+
+    double progress = double(i + 1) / N;
+    printProgressBar(progress);           // Nice progress bar
+
+    vector<double> meas(n_props,0);
+    for(int k=0; k<L; k++)
+    {
+      Move();
+      if(k%10==0)  Measure(true, routine);
+      else         Measure(false, routine);
+      meas.at(iv)+=stima_pot;
+      meas.at(ik)+=stima_kin;
+      meas.at(ie)+=stima_etot;
+      meas.at(it)+=stima_temp;
+    }
+    for(int j=0; j<n_props; j++)
+    {
+      sum.at(j) += meas.at(j)/(L);
+      sum2.at(j)+= (meas.at(j)/(L))*(meas.at(j)/(L));
+      out << setprecision(8)  << sum.at(j)/(i+1) << "   " << setprecision(8) << error(sum.at(j)/(i+1), sum2.at(j)/(i+1), i) << "   ";
+    }
+    out << endl;
+  }
+  cout << endl;
+  out.close();
+  return;
+}
+
+
+double error(double val, double val2, unsigned int k){
+  if(k==0) return 0;
+  else return sqrt((val2-val*val)/k);
+};
+
+// ========================== MOVING PARTICLES WITH THE VERLET ALGORITHM ====================
+
+void Move(void){ //Move particles with Verlet algorithm
+  double xnew, ynew, znew, fx[m_part], fy[m_part], fz[m_part];
+
+  for(int i=0; i<npart; ++i){ //Force acting on particle i
+    fx[i] = Force(i,0);
+    fy[i] = Force(i,1);
+    fz[i] = Force(i,2);
+  }
+
+  for(int i=0; i<npart; ++i){ //Verlet integration scheme
+
+    xnew = Pbc( 2.0 * x[i] - xold[i] + fx[i] * pow(delta,2) );
+    ynew = Pbc( 2.0 * y[i] - yold[i] + fy[i] * pow(delta,2) );
+    znew = Pbc( 2.0 * z[i] - zold[i] + fz[i] * pow(delta,2) );
+
+    vx[i] = Pbc(xnew - xold[i])/(2.0 * delta);
+    vy[i] = Pbc(ynew - yold[i])/(2.0 * delta);
+    vz[i] = Pbc(znew - zold[i])/(2.0 * delta);
+
+    xold[i] = x[i];
+    yold[i] = y[i];
+    zold[i] = z[i];
+
+    x[i] = xnew;
+    y[i] = ynew;
+    z[i] = znew;
+  }
+  return;
+}
+
+
+double eval_mean_v2()
+{
+  double mean_v2 = 0;
+
+  for(int i=0; i<npart; i++){
+    vx[i] = Pbc(x[i] - xold[i])/(delta);
+    vy[i] = Pbc(y[i] - yold[i])/(delta);
+    vz[i] = Pbc(z[i] - zold[i])/(delta);
+    mean_v2+=vx[i]*vx[i] + vy[i]*vy[i] + vz[i]*vz[i];
+  }
+
+  mean_v2 /= (double)npart;
+  return mean_v2;
+}
+
+
+void rescale_velocities(vector<double> history_kin)
+{
+
+  double fs       = 0.0;
+  double sumv2    = 0.0;
+
+  for(unsigned int i=0; i<history_kin.size(); i++) sumv2 += history_kin.at(i);
+
+  sumv2 /= history_kin.size();
+  // Un-comment for debug
+  // cout << "Mean value of the mean velocities" << sumv2 << endl;
+
+  fs = sqrt(3 * temp / sumv2);   // fs = velocity scale factor
+
+  // Un-comment for debug
+  //cout << "Velocity Rescale factor: " << fs << endl;
+  for (int i=0; i<npart; ++i){
+    vx[i] *= fs;
+    vy[i] *= fs;
+    vz[i] *= fs;
+
+    xold[i] = Pbc(x[i] - vx[i] * delta);
+    yold[i] = Pbc(y[i] - vy[i] * delta);
+    zold[i] = Pbc(z[i] - vz[i] * delta);
+  }
+  return;
+}
+
+//Computes F= -Grad_ip V(r)
+double Force(int ip, int idir)
+{
+  double f=0.0;
+  double dvec[3], dr;
+
+  for (int i=0; i<npart; ++i)
+  {
+    if(i != ip)
+    {
+      dvec[0] = Pbc( x[ip] - x[i] );  // distance ip-i in pbc
+      dvec[1] = Pbc( y[ip] - y[i] );
+      dvec[2] = Pbc( z[ip] - z[i] );
+
+      dr = dvec[0]*dvec[0] + dvec[1]*dvec[1] + dvec[2]*dvec[2];
+      dr = sqrt(dr);
+
+      if(dr < rcut)
+      {
+        f += dvec[idir] * (48.0/pow(dr,14) - 24.0/pow(dr,8)); // -Grad_ip V(r)
+      }
+    }
+  }
+
+  return f;
+}
+
+
+void Measure(bool print_istant, string routine){ //Properties measurement
+  int bin;
+  long double v, t, vij;
+  double dx, dy, dz, dr;
+  ofstream Epot, Ekin, Etot, Temp;
+
+
+  if(print_istant==true){
+
+
+    string suffix = "_" + routine + ".dat";
+
+    Epot.open("output_epot" + suffix, ios::app);
+    Ekin.open("output_ekin" + suffix, ios::app);
+    Temp.open("output_temp" + suffix, ios::app);
+    Etot.open("output_etot" + suffix, ios::app);
+
+    /* Backup
+    Epot.open("output_epot.dat",ios::app);
+    Ekin.open("output_ekin.dat",ios::app);
+    Temp.open("output_temp.dat",ios::app);
+    Etot.open("output_etot.dat",ios::app);
+    */
+  }
+
+  v = 0.0; //reset observables
+  t = 0.0;
+
+//cycle over pairs of particles
+  for (int i=0; i<npart-1; ++i){
+    for (int j=i+1; j<npart; ++j){
+
+     dx = Pbc( xold[i] - xold[j] ); // Note: xold is r(t)
+     dy = Pbc( yold[i] - yold[j] );
+     dz = Pbc( zold[i] - zold[j] );
+
+     dr = dx*dx + dy*dy + dz*dz;
+     dr = sqrt(dr);
+
+     if(dr < rcut){
+       vij = 4.0/pow(dr,12) - 4.0/pow(dr,6);
+
+//Potential energy
+       v += vij;
+     }
+    }
+  }
+
+//Kinetic energy
+  for (int i=0; i<npart; ++i) t += 0.5 * (vx[i]*vx[i] + vy[i]*vy[i] + vz[i]*vz[i]);
+
+  stima_pot  = (v/(double)npart); //Potential energy per particle
+  stima_kin  = (t/(double)npart); //Kinetic energy per particle
+  stima_temp = ((2.0 / 3.0) * t/(double)npart); //Temperature
+  stima_etot = ((t+v)/(long double)npart); //Total energy per particle
+
+  if(print_istant==true){
+    Epot << stima_pot  << endl;
+    Ekin << stima_kin  << endl;
+    Temp << stima_temp << endl;
+    Etot << stima_etot << endl;
+
+    Epot.close();
+    Ekin.close();
+    Temp.close();
+    Etot.close();
+  }
+  return;
+}
+
+
+void ConfFinal(void){ //Write final configuration
+  ofstream WriteConf, WriteOld;
+
+  cout << "Print final configuration to file config.final " << endl << endl;
+  WriteConf.open("config.final");
+  WriteOld.open("old.final");
+
+  for (int i=0; i<npart; ++i){
+    WriteConf << x[i]/box    << "   " <<  y[i]/box    << "   " << z[i]/box << endl;
+    WriteOld  << xold[i]/box << "   " <<  yold[i]/box << "   " << zold[i]/box << endl;
+  }
+  WriteConf.close();
+  WriteOld.close();
+  return;
+}
+
+
+void ConfXYZ(int nconf){ //Write configuration in .xyz format
+  ofstream WriteXYZ;
+
+  WriteXYZ.open("frames/config_" + to_string(nconf) + ".xyz");
+  WriteXYZ << npart << endl;
+  WriteXYZ << "This is only a comment!" << endl;
+  for (int i=0; i<npart; ++i){
+    WriteXYZ << "LJ  " << Pbc(x[i]) << "   " <<  Pbc(y[i]) << "   " << Pbc(z[i]) << endl;
+  }
+  WriteXYZ.close();
+}
+
+double Pbc(double r){  //Algorithm for periodic boundary conditions with side L=box
+    return r - box * rint(r/box);
+}
+
+
+// Custom Progress bar
+void printProgressBar(double progress) 
+{
+  int barWidth = 50;
+  cout << "[";
+  int pos = barWidth * progress;
+  for (int i = 0; i < barWidth; ++i) 
+  {
+      if (i < pos) cout << "=";
+      else if (i == pos) cout << ">";
+      else cout << " ";
+  }
+  cout << "] " << setw(3) << int(progress * 100.0) << " %\r";
+  cout.flush();
+}
+
+/****************************************************************
+*****************************************************************
+    _/    _/  _/_/_/  _/       Numerical Simulation Laboratory
+   _/_/  _/ _/       _/       Physics Department
+  _/  _/_/    _/    _/       Universita' degli Studi di Milano
+ _/    _/       _/ _/       Prof. D.E. Galli
+_/    _/  _/_/_/  _/_/_/_/ email: Davide.Galli@unimi.it
+*****************************************************************
+*****************************************************************/
