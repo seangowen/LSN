@@ -3,13 +3,13 @@
 void Initialize();
 void Reset(int);
 void Move();
-void PrintPos(int);
+void PrintPositions(int);
 void Measure();
 void Accumulate();
 void Average(int);
-void Report(int);
+void PrintMetropolisParameters(int iblk);
 void ReadInput();
-void Welcome();
+void PrintParameters();
 
 double wavefunction(double, double, double);
 double pdf(double, double, double);
@@ -29,7 +29,6 @@ double glob_av[m_props],glob_av2[m_props];
 double stima_u;
 double err_u;
 
-// RNG
 Random rnd;
 int seed[4];
 int p1, p2;
