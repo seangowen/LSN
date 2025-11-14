@@ -21,6 +21,8 @@ double GeometricBrownianMotion::N(double x)
     return 0.5 * (1 + erf(x / sqrt(2)));
 }
 
+// Note: in the end, the two functions below are not used
+
 // Black-Scholes call price
 double GeometricBrownianMotion::black_scholes_call(double T, double K, double r) const 
 {

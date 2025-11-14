@@ -16,160 +16,144 @@ _/    _/  _/_/_/  _/_/_/_/ email: Davide.Galli@unimi.it
 #include <fstream>
 #include <string>
 #include <vector>
-#include "math.h"
+#include <cmath>
 #include "random.h"
 #include "GeometricBrownianMotion.h"
 #include "statistics.h"
 
 using namespace std;
 
+int main(int argc, char* argv[]) {
 
-int main (int argc, char *argv[]){
+    Random rnd;
+    int seed[4];
+    int p1, p2;
 
-   Random rnd;
-   int seed[4];
-   int p1, p2;
-   ifstream Primes("Primes");
-   if (Primes.is_open()){
-      Primes >> p1 >> p2 ;
-   } else cerr << "PROBLEM: Unable to open Primes" << endl;
-   Primes.close();
+    ifstream Primes("Primes");
+    if (Primes.is_open()) {
+        Primes >> p1 >> p2;
+        Primes.close();
+    } else {
+        cerr << "PROBLEM: Unable to open Primes" << endl;
+        return 1;
+    }
 
-   ifstream input("seed.in");
-   string property;
-   if (input.is_open()){
-      while ( !input.eof() ){
-         input >> property;
-         if( property == "RANDOMSEED" ){
-            input >> seed[0] >> seed[1] >> seed[2] >> seed[3];
-            rnd.SetRandom(seed,p1,p2);
-         }
-      }
-      input.close();
-   } else cerr << "PROBLEM: Unable to open seed.in" << endl;
+    ifstream input("seed.in");
+    string property;
+    if (input.is_open()) {
+        while (!input.eof()) {
+            input >> property;
+            if (property == "RANDOMSEED") {
+                input >> seed[0] >> seed[1] >> seed[2] >> seed[3];
+                rnd.SetRandom(seed, p1, p2);
+            }
+        }
+        input.close();
+    } else {
+        cerr << "PROBLEM: Unable to open seed.in" << endl;
+        return 1;
+    }
 
-   for(int i=0; i<20; i++){
-      cout << rnd.Rannyu() << endl;
-   }    
+    // ---------------- Parameters -------------------
 
+    const double S0 = 100.0;    // Initial asset price
+    const double K = 100.0;     // Strike price
+    const double T = 1.0;       // Maturity
+    const double mu = 0.1;      // Risk-free interest rate
+    const double sigma = 0.25;  // Volatility
 
-   // ------------------- EX.3 -------------------------
-
-
-   // Parameters
-
-   double S0 = 100; // Initial Asset Price
-   double S_T = 0; // Terminal Asser Price
-   double mu = 0.1; // Risk Free Interest Rate
-   double sigma = 0.25; // Volatility
-   double K = 100; // Strike Price
-   double T = 1.0; // Delivery Time
-
-
-   // ---------------------------------------------------
-   // Direct Sampling of the Final Asset Price
+    const int M = 100000;       // Total Monte Carlo throws
+    const int N = 100;          // Number of blocks
+    const int timesteps = 100;  // For discretized GBM
+    const double dt = T / timesteps;
 
 
-   int M = 100000; // TOTAL Number of throws
-   int N = 100; // Number of blocks
-   // N.B. there are L= M/N throws per block
+    vector<double> call_ave(N, 0.0);
+    vector<double> call_av2(N, 0.0);
+    vector<double> put_ave(N, 0.0);
+    vector<double> put_av2(N, 0.0);
 
-   double diff;
+    // ------------------- DIRECT SAMPLING -------------------
 
-   vector<double> call_ave(N,0);
-   vector<double> call_av2(N,0);
-   vector<double> put_ave(N,0);
-   vector<double> put_av2(N,0);
+    cout << "Starting direct sampling ..." << endl;
 
+    GeometricBrownianMotion gbm(S0, mu, sigma);
 
-   for (int i=0; i < N; i++ )
-   {
-      S0 = 100;
+    for (int i = 0; i < N; i++) {
+        call_ave[i] = 0.0;
+        put_ave[i] = 0.0;
 
-      for (int j=0; j < M; j++)
-      {
-         S_T = gbm.asset_terminal_price(T, rnd);
+        for (int j = 0; j < M; j++) {
+            double S_T = gbm.asset_terminal_price(T, rnd);
 
-         diff = S_T-K;
-         call_ave[i] += exp(-mu*T)*max(0., diff); // Call Price
+            double diff_call = S_T - K;
+            double diff_put  = K - S_T;
 
-         diff = K-S_T;
-         put_ave[i] += exp(-mu*T)*max(0., diff); // Put Price
-      }
+            call_ave[i] += exp(-mu*T) * max(0.0, diff_call);
+            put_ave[i]  += exp(-mu*T) * max(0.0, diff_put);
+        }
 
-      call_ave[i] /= M;
-      call_av2[i] = call_ave[i]*call_ave[i];
+        call_ave[i] /= M;
+        call_av2[i] = call_ave[i] * call_ave[i];
 
-      put_ave[i] /= M;
-      put_av2[i] = put_ave[i]*put_ave[i];
-   }
+        put_ave[i] /= M;
+        put_av2[i] = put_ave[i] * put_ave[i];
+    }
 
+    string datafile = "./output_files/call_option_direct_sampling.dat";
+    blocked_statistics(call_ave, call_av2, N, datafile);
 
-   // Cumulative blocked statistics
+    datafile = "./output_files/put_option_direct_sampling.dat";
+    blocked_statistics(put_ave, put_av2, N, datafile);
 
-   string datafile = "";
+    // ------------------- DISCRETIZED PATH SAMPLING -------------------
 
-   datafile = "./output_files/call_option_direct_sampling.dat";
-   blocked_statistics(call_ave, call_av2, N, datafile);
+    cout << "Starting discretized path sampling (might take longer) ..." << endl;
 
-   datafile = "./output_files/put_option_direct_sampling.dat";
-   blocked_statistics(put_ave, put_av2, N, datafile);
+    fill(call_ave.begin(), call_ave.end(), 0.0);
+    fill(call_av2.begin(), call_av2.end(), 0.0);
+    fill(put_ave.begin(), put_ave.end(), 0.0);
+    fill(put_av2.begin(), put_av2.end(), 0.0);
 
+    // NOTE: in the end, I found it simpler to compute S_T
+    // directly inside the loop
 
-   // ---------------------------------------------------
-   // Discretized Sampling of the Final Asset Price
+    for (int i = 0; i < N; i++) {
+        for (int j = 0; j < M; j++) {
+            double S_T = S0;
 
-   
-   // 3.1.2 - Path Sampling of GBM ------> Check Code Snippet Below
+            // Simulating the entire path
+            for (int k = 0; k < timesteps; k++) {
+                double Z = rnd.Gauss(0.0, 1.0);
+                S_T = S_T * exp((mu - 0.5*sigma*sigma)*dt + sigma*sqrt(dt)*Z);
+            }
 
-   M = 100000;
-   int timesteps = 100;
-   float t = T / timesteps;
+            double diff_call = S_T - K;
+            double diff_put  = K - S_T;
 
-   fill(call_ave.begin(), call_ave.end(), 0);
-   fill(call_av2.begin(), call_av2.end(), 0);
-   fill(put_ave.begin(), put_ave.end(), 0);
-   fill(put_av2.begin(), put_av2.end(), 0);
+            call_ave[i] += exp(-mu*T) * max(0.0, diff_call);
+            put_ave[i]  += exp(-mu*T) * max(0.0, diff_put);
+        }
 
-   GeometricBrownianMotion gbm(S0, mu, sigma);
+        call_ave[i] /= M;
+        call_av2[i] = call_ave[i] * call_ave[i];
 
-   for (int i = 0; i < N; i++) // Blocks
-   {
-      for (int j = 0; j < M; j++) // Sampling the future price
-      { 
-         S_T = 100;
-         for (int k = 0; k < timesteps; k++) // Path simulation
-         { 
-            S_t = gbm(S_T, t, r, sigma, rnd);
-         }
+        put_ave[i] /= M;
+        put_av2[i] = put_ave[i] * put_ave[i];
+    }
 
-         diff = S_T-K;
-         call_ave[i] += exp(-r*T)*max(0., diff); // Call Price
+    datafile = "./output_files/call_option_path_sampling.dat";
+    blocked_statistics(call_ave, call_av2, N, datafile);
 
-         diff = K-S_T;
-         put_ave[i] += exp(-r*T)*max(0., diff); // Put Price
+    datafile = "./output_files/put_option_path_sampling.dat";
+    blocked_statistics(put_ave, put_av2, N, datafile);
 
-      }
+    rnd.SaveSeed();
+    cout << "Simulation completed!" << endl;
 
-      call_ave[i] /= M;
-      call_av2[i] = call_ave[i]*call_ave[i];
-
-      put_ave[i] /= M;
-      put_av2[i] = put_ave[i]*put_ave[i];
-   }
-
-  // Statistics
-
-  datafile = "./output_files/call_option_path_sampling.dat";
-  blocked_statistics(call_ave, call_av2, N, datafile);
-
-  datafile = "./output_files/put_option_path_sampling.dat";
-  blocked_statistics(put_ave, put_av2, N, datafile);
-
-
-   rnd.SaveSeed();
-   return 0;
+    return 0;
 }
+
 
 /****************************************************************
 *****************************************************************
