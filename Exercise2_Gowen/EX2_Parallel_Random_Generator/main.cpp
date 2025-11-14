@@ -259,75 +259,6 @@ int main (int argc, char *argv[]){
 
    // =================== Ex. 2.2 Random Walk ===================
 
-/* backup
-   int n_rw = 10000;       // total number of random walks
-   int n_blocks = 100;     // number of blocks
-   int walks_per_block = n_rw / n_blocks; // walks per block
-
-   vector<double> average_modulus_square_distance_per_block(n_blocks, 0.0);
-   vector<double> error(n_blocks, 0.0);
-
-   ofstream outputfile_random_walk("output_files/ex2_2_discrete_random_walk.dat");
-   if (!outputfile_random_walk.is_open()) 
-   {
-      cerr << "Error opening file!" << endl;
-      return 1;
-   }
-   
-   outputfile_random_walk << "Steps taken, Average distance walked, Error\n";
-
-   // Loop over number of steps
-   for (int n_steps = 0; n_steps <= n_blocks; n_steps++) 
-   {
-
-      // Divide walks into blocks
-      vector<double> block_averages(n_blocks, 0.0);
-
-      for (int i = 0; i < n_blocks; i++) 
-      {
-         double sum_block = 0.0;
-
-         for (int j = 0; j < walks_per_block; j++) 
-         {
-            vector<int> position = {0, 0, 0};
-            random_walk(position, rnd, n_steps);
-
-            double d2 = walked_distance(position); // d^2
-            sum_block += d2;
-         }
-
-         block_averages[i] = sum_block / walks_per_block; // average per block
-      }
-
-      // Compute mean and variance across blocks
-      double mean = 0.0;
-      double mean2 = 0.0;
-
-      for (int i = 0; i < n_blocks; i++) 
-      {
-         mean += block_averages[i];
-         mean2 += block_averages[i] * block_averages[i];
-      }
-
-      mean /= n_blocks;
-      mean2 /= n_blocks;
-
-      double variance = mean2 - mean*mean;
-      double se = sqrt(variance / n_blocks); // standard error of mean
-
-      // Compute sqrt(<d^2>) and propagate error
-      double average_distance = sqrt(mean);
-      double error_distance = se / (2 * sqrt(mean));
-
-      outputfile_random_walk << n_steps << "," << average_distance << "," << error_distance << endl;
-
-      cout  << "Steps: " << n_steps
-            << " | <d> = " << average_distance
-            << " | Error = " << error_distance << endl;
-   }
-
-*/
-
    // -------------- Discrete Walk on a cubic lattice ------------
 
    simulate_discrete_random_walk(
@@ -345,42 +276,6 @@ int main (int argc, char *argv[]){
      100,                                    // n_groups
      "output_files/ex2_2_continuous_random_walk.dat"  // output file
    );
-
-
-   /*
-   n_rw_experiments = 10000; // Number of random walks experiments
-   n_max_steps = 100;        // Max number of steps
-
-   // Resetting average vectors to zero
-
-   fill(mean_r.begin(), mean_r.end(), 0);
-   fill(mean_rsquared.begin(), mean_rsquared.end(), 0);
-
-   vector<double> sphere_position(3); // a 3D vector for position
-
-
-   for (int i = 0; i < n_max_steps; i++)
-   {
-
-      for (int j = 0; j < n_rw_experiments; j++) 
-      {
-
-         sphere_position[0] = 0;
-         sphere_position[1] = 0;
-         sphere_position[2] = 0;
-
-         continuous_random_walk(sphere_position, rnd, i+1);
-         mean_r[i] += continuous_walked_distance(sphere_position);
-      }
-
-      mean_r[i] /= n_rw_experiments;
-      mean_rsquared[i] = mean_r[i]*mean_r[i];
-   }
-
-   outputfile = "output_files/ex2_2_continuous_random_walk.dat";
-   blocked_statistics(mean_r, mean_rsquared, n_max_steps, outputfile);
-
-   */
 
    rnd.SaveSeed();
    return 0;

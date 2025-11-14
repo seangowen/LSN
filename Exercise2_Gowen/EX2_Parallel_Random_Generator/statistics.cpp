@@ -38,28 +38,6 @@ void blocked_statistics(vector<double> mean, vector<double>  mean_squared, int N
    outfile.close();
 }
 
-/*
-void blocked_statistics_random_walk(vector<double> mean_r, vector<double> mean_rsquared, int N_blocks, 
-   int L_throws_per_block, string filename)
-{
-   int N = N_blocks;
-   int L = L_throws_per_block;
-
-   ofstream outfile;
-   outfile.open(filename);
-
-   vector<double> sum_r(L,0);
-   vector<double> sum_rsquared(L,0);
-   vector<double> block_error(sum_r, sum_rsquared, 0);
-
-   for(int i=0; i< L; i++)
-   {
-      sum_r += mean_r[i];
-      sum_rsquared += mean_rsquared[i];
-   }
-}
-*/
-
 // error = statistical uncertainty of the mean
 float error(vector<double> mean, vector<double> mean_squared, int steps)
 {
