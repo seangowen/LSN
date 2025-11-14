@@ -38,8 +38,8 @@ void continuous_random_walk_step(vector<double>& sphere_position, Random& rnd)
     theta = acos(1 - 2*rnd.Rannyu());  // theta = arccos(1 - 2*u)
 
     // Update position
-    sphere_position[0] += sin(theta) * cos(phi);
-    sphere_position[1] += sin(theta) * sin(phi);
+    sphere_position[0] += 10*sin(theta) * cos(phi);
+    sphere_position[1] += 10*sin(theta) * sin(phi);
     sphere_position[2] += cos(theta);
 }
 
