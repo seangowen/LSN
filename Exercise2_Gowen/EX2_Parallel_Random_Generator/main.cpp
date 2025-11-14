@@ -77,8 +77,6 @@ void simulate_continuous_random_walk(Random &rnd,
         avg_r2    /= n_groups;
         avg_r2_sq /= n_groups;
 
-        //double var_r2 = avg_r2_sq - avg_r2 * avg_r2;
-        //double err_r2 = sqrt(var_r2 / n_groups);
 
       // observable: r = sqrt(<r²>)
       double avg_r = sqrt(avg_r2);

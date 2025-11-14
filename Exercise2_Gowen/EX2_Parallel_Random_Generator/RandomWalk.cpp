@@ -29,19 +29,18 @@ void random_walk_step(vector<int>& position, Random& rnd)
 
 void continuous_random_walk_step(vector<double>& sphere_position, Random& rnd)
 {
-	double theta, phi;
+    double theta, phi;
 
-	// To get a uniformly distributed random variable ranging from 0 to 2Pi
-	// we "scale" r by multiplying it by 2Pi 
-   	phi = rnd.Rannyu(0,2*M_PI);
+    // Uniform azimuth
+    phi = rnd.Rannyu(0, 2*M_PI);
 
-   	// This function samples theta from arccos(1-2u)
-	theta= rnd.RanTheta3d();
+    // Polar angle sampled for uniform sphere distribution
+    theta = acos(1 - 2*rnd.Rannyu());  // theta = arccos(1 - 2*u)
 
-
-   	sphere_position[0] += sin(theta) * cos(phi);
-   	sphere_position[1] += sin(theta) * cos(phi);
-   	sphere_position[2] += cos(theta);
+    // Update position
+    sphere_position[0] += sin(theta) * cos(phi);
+    sphere_position[1] += sin(theta) * sin(phi);
+    sphere_position[2] += cos(theta);
 }
 
 
