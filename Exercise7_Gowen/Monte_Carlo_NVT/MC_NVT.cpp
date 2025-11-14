@@ -261,109 +261,59 @@ void Accumulate(void)
 
 // ========================= AVERAGES =======================
 
+
 void Averages(int iblk)
 {
+    double r, gdir;
+    ofstream Gave, Epot, Pres;
+    const int wd = 12;
 
-  double r, gdir;
-  ofstream Gofr, Gave, Epot, Pres;
-  const int wd=12;
+    cout << "Block number " << iblk << endl;
+    cout << "Acceptance rate " << accepted / attempted << endl << endl;
 
-  cout << "Block number " << iblk << endl;
-  cout << "Acceptance rate " << accepted/attempted << endl << endl;
+    // --- Potential energy per particle ---
+    stima_pot = blk_av[iv] / blk_norm / (double)npart + vtail;
+    glob_av[iv] += stima_pot;
+    glob_av2[iv] += stima_pot * stima_pot;
+    err_pot = error(glob_av[iv], glob_av2[iv], iblk);
 
-  Epot.open("output.epot.0",ios::app);
-  Pres.open("output.pres.0",ios::app);
-  Gofr.open("output.gofr.0",ios::app);
-  Gave.open("output.gave.0",ios::app);
+    // --- Pressure ---
+    stima_pres = rho * temp + (blk_av[iw] / blk_norm + ptail * (double)npart) / vol;
+    glob_av[iw] += stima_pres;
+    glob_av2[iw] += stima_pres * stima_pres;
+    err_press = error(glob_av[iw], glob_av2[iw], iblk);
 
-  stima_pot = blk_av[iv]/blk_norm/(double)npart + vtail; //Potential energy
-  glob_av[iv] += stima_pot;
-  glob_av2[iv] += stima_pot*stima_pot;
-  err_pot=error(glob_av[iv],glob_av2[iv],iblk);
-
-  stima_pres = rho * temp + (blk_av[iw]/blk_norm + ptail * (double)npart) / vol; //Pressure
-  glob_av[iw] += stima_pres;
-  glob_av2[iw] += stima_pres*stima_pres;
-  err_press=error(glob_av[iw],glob_av2[iw],iblk);
-
-  //Potential energy per particle
-  Epot << setw(wd) << iblk <<  setw(wd) << stima_pot << setw(wd) << glob_av[iv]/(double)iblk << setw(wd) << err_pot << endl;
-  //Pressure
-  Pres << setw(wd) << iblk <<  setw(wd) << stima_pres << setw(wd) << glob_av[iw]/(double)iblk << setw(wd) << err_press << endl;
-
-  //g(r)
-
-  for(int k=0; k<nbins; k++)
-  {
-    r = k * bin_size;
-    blk_av[igofr + k] /= rho * npart * (4 * pi / 3 * (pow(r + bin_size, 3) - pow(r, 3)));
-    gdir = blk_av[igofr + k] / blk_norm;
-    glob_av[igofr + k] += gdir;
-    glob_av2[igofr + k] += gdir*gdir;
-    err_gdir = error(glob_av[igofr + k], glob_av2[igofr + k], iblk);
-
-    Gofr << setw(wd) << iblk << setw(wd) << r << setw(wd)
-         << glob_av[igofr + k]/double(iblk) << setw(wd) << err_gdir << endl;
-
-    if(iblk == nblk)
+    // --- Write final g(r) only at last block ---
+    if (iblk == nblk)
     {
-        Gave << r << setw(wd) << glob_av[igofr + k]/double(nblk) << setw(wd) << err_gdir << endl;
+        Gave.open("output.gave.0");
+        for (int k = 0; k < nbins; k++)
+        {
+            r = k * bin_size;
+
+            // Normalize g(r)
+            blk_av[igofr + k] /= rho * npart * (4.0 * M_PI / 3.0 * (pow(r + bin_size, 3) - pow(r, 3)));
+            gdir = blk_av[igofr + k] / blk_norm;
+
+            Gave << r << " " << gdir << " " << error(glob_av[igofr + k] + gdir, glob_av2[igofr + k] + gdir*gdir, iblk) << endl;
+        }
+        Gave.close();
     }
-  }
 
-  cout << "----------------------------" << endl << endl;
+    // --- Energy and pressure outputs ---
+    Epot.open("output.epot.0", ios::app);
+    Epot << setw(wd) << iblk << setw(wd) << stima_pot
+         << setw(wd) << glob_av[iv] / (double)iblk << setw(wd) << err_pot << endl;
+    Epot.close();
 
-  Epot.close();
-  Pres.close();
-  Gofr.close();
+    Pres.open("output.pres.0", ios::app);
+    Pres << setw(wd) << iblk << setw(wd) << stima_pres
+         << setw(wd) << glob_av[iw] / (double)iblk << setw(wd) << err_press << endl;
+    Pres.close();
 }
 
 
-// ====================== BLOCKING METHOD =========================
 
-/*
-void blocking_on_MD(int M, int N, string blocked_stats_path, string routine){
-
-  ofstream out;
-  int L = M/N;
-  //out.open(filename, ios::out | ios::trunc);
-  out.open(blocked_stats_path, ios::out | ios::trunc);
-  vector<double> sum(n_props,0);        // n_props index for n_props-dim measures
-  vector<double> sum2(n_props,0);
-
-  cout << "Starting simulation with blocking. " << endl;
-  for(unsigned int i=0; i<N; i++)
-  {
-    // Uncomment for debugging
-    //if((i)%1==0) cout << "Running block " << i << " of " << N << endl;
-
-    double progress = double(i + 1) / N;
-    printProgressBar(progress);           // Nice progress bar
-
-    vector<double> meas(n_props,0);
-    for(int k=0; k<L; k++)
-    {
-      Move();
-      if(k%10==0)  Measure(true);
-      else         Measure(false);
-      meas.at(iv)+=stima_pot;
-      meas.at(ik)+=stima_kin;
-      meas.at(ie)+=stima_etot;
-      meas.at(it)+=stima_temp;
-    }
-    for(int j=0; j<n_props; j++)
-    {
-      sum.at(j) += meas.at(j)/(L);
-      sum2.at(j)+= (meas.at(j)/(L))*(meas.at(j)/(L));
-      out << setprecision(8)  << sum.at(j)/(i+1) << "   " << setprecision(8) << error(sum.at(j)/(i+1), sum2.at(j)/(i+1), i) << "   ";
-    }
-    out << endl;
-  }
-  cout << endl;
-  out.close();
-  return;
-}
-*/
 
 double error(double sum, double sum2, int iblk)
 {
@@ -499,23 +449,6 @@ void Measure(bool print)
   }
 }
 
-/*
-void ConfFinal(void){ //Write final configuration
-  ofstream WriteConf, WriteOld;
-
-  cout << "Print final configuration to file config.final " << endl << endl;
-  WriteConf.open("config.final");
-  WriteOld.open("old.final");
-
-  for (int i=0; i<npart; ++i){
-    WriteConf << x[i]/box    << "   " <<  y[i]/box    << "   " << z[i]/box << endl;
-    WriteOld  << xold[i]/box << "   " <<  yold[i]/box << "   " << zold[i]/box << endl;
-  }
-  WriteConf.close();
-  WriteOld.close();
-  return;
-}
-*/
 
 void ConfFinal(void)
 {
