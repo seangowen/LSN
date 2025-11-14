@@ -24,6 +24,155 @@ _/    _/  _/_/_/  _/_/_/_/ email: Davide.Galli@unimi.it
 using namespace std;
 
 
+
+// --------- Routine Functions ------------
+
+
+void simulate_continuous_random_walk(Random &rnd,
+                                     int n_walks_total,
+                                     int n_groups,
+                                     const string &output_filename)
+{
+      int walks_per_group = n_walks_total / n_groups;
+
+      ofstream out(output_filename);
+      if (!out.is_open()) {
+        cerr << "Error: cannot open output file!" << endl;
+        return;
+      }
+
+      out << "Steps, <r>, Error\n";
+
+      // Loop over number of RW steps
+      for (int steps = 0; steps <= n_groups; steps++)
+      {
+        vector<double> group_means(n_groups, 0.0);
+
+        // ========== GROUP LOOP ==========
+        for (int g = 0; g < n_groups; g++)
+        {
+            double sum_r2 = 0.0;
+
+            for (int w = 0; w < walks_per_group; w++)
+            {
+                vector<double> position(3);
+                continuous_random_walk(position, rnd, steps);
+
+                sum_r2 += continuous_walked_distance(position);
+            }
+
+            group_means[g] = sum_r2 / walks_per_group;
+        }
+
+        // ========== AVERAGE & ERROR ==========
+        double avg_r2 = 0.0;
+        double avg_r2_sq = 0.0;
+
+        for (double gm : group_means)
+        {
+            avg_r2     += gm;
+            avg_r2_sq  += gm * gm;
+        }
+
+        avg_r2    /= n_groups;
+        avg_r2_sq /= n_groups;
+
+        //double var_r2 = avg_r2_sq - avg_r2 * avg_r2;
+        //double err_r2 = sqrt(var_r2 / n_groups);
+
+      // observable: r = sqrt(<r²>)
+      double avg_r = sqrt(avg_r2);
+      double err_r;
+
+      // avoid division by zero for the trivial case
+      if (steps == 0) { err_r = 0.0; } 
+      else 
+      {
+          double se_r2 = sqrt( (avg_r2_sq - avg_r2 * avg_r2) / n_groups );
+          err_r = se_r2 / (2.0 * avg_r);   // error propagation
+      }
+
+        out << steps << "," << avg_r << "," << err_r << "\n";
+
+        cout << "Steps: " << steps
+             << " | <r> = " << avg_r
+             << " | Error = " << err_r << endl;
+      }
+
+      out.close();
+}
+
+
+void simulate_discrete_random_walk(Random &rnd,
+                                   int total_walks,
+                                   int num_groups,
+                                   const string &output_filename)
+{
+    int walks_per_group = total_walks / num_groups;
+
+    ofstream out(output_filename);
+    if (!out.is_open()) {
+        cerr << "Error opening file!" << endl;
+        return;
+    }
+
+    out << "Steps taken, Average distance walked, Error\n";
+
+    // Loop over number of steps
+    for (int steps = 0; steps <= num_groups; steps++)
+    {
+        vector<double> group_means(num_groups, 0.0);
+
+        // ========== GROUP LOOP ==========
+        for (int g = 0; g < num_groups; g++)
+        {
+            double sum_d2 = 0.0;
+
+            for (int w = 0; w < walks_per_group; w++)
+            {
+                vector<int> position = {0, 0, 0};
+                random_walk(position, rnd, steps);
+
+                double d2 = walked_distance(position);  // |r|^2
+                sum_d2 += d2;
+            }
+
+            group_means[g] = sum_d2 / walks_per_group;
+        }
+
+        // ========== AVERAGE & ERROR ==========
+        double avg_d2 = 0.0;
+        double avg_d2_sq = 0.0;
+
+        for (double gm : group_means)
+        {
+            avg_d2     += gm;
+            avg_d2_sq  += gm * gm;
+        }
+
+        avg_d2    /= num_groups;
+        avg_d2_sq /= num_groups;
+
+        double variance = avg_d2_sq - avg_d2 * avg_d2;
+        double se_d2 = sqrt(variance / num_groups);
+
+        // Convert ⟨d²⟩ to ⟨d⟩
+        double avg_d = sqrt(avg_d2);
+        double err_d = se_d2 / (2.0 * sqrt(avg_d2));
+
+        out << steps << "," << avg_d << "," << err_d << "\n";
+
+        cout << "Steps: " << steps
+             << " | <d> = " << avg_d
+             << " | Error = " << err_d << endl;
+    }
+
+    out.close();
+}
+
+
+
+
 int main (int argc, char *argv[]){
 
    Random rnd;
@@ -112,7 +261,7 @@ int main (int argc, char *argv[]){
 
    // =================== Ex. 2.2 Random Walk ===================
 
-
+/* backup
    int n_rw = 10000;       // total number of random walks
    int n_blocks = 100;     // number of blocks
    int walks_per_block = n_rw / n_blocks; // walks per block
@@ -133,7 +282,7 @@ int main (int argc, char *argv[]){
    for (int n_steps = 0; n_steps <= n_blocks; n_steps++) 
    {
 
-      // 1️⃣ Divide walks into blocks
+      // Divide walks into blocks
       vector<double> block_averages(n_blocks, 0.0);
 
       for (int i = 0; i < n_blocks; i++) 
@@ -152,7 +301,7 @@ int main (int argc, char *argv[]){
          block_averages[i] = sum_block / walks_per_block; // average per block
       }
 
-      // 2️⃣ Compute mean and variance across blocks
+      // Compute mean and variance across blocks
       double mean = 0.0;
       double mean2 = 0.0;
 
@@ -168,11 +317,10 @@ int main (int argc, char *argv[]){
       double variance = mean2 - mean*mean;
       double se = sqrt(variance / n_blocks); // standard error of mean
 
-      // 3️⃣ Compute sqrt(<d^2>) and propagate error
+      // Compute sqrt(<d^2>) and propagate error
       double average_distance = sqrt(mean);
       double error_distance = se / (2 * sqrt(mean));
 
-      // 4️⃣ Write to file
       outputfile_random_walk << n_steps << "," << average_distance << "," << error_distance << endl;
 
       cout  << "Steps: " << n_steps
@@ -180,119 +328,25 @@ int main (int argc, char *argv[]){
             << " | Error = " << error_distance << endl;
    }
 
+*/
 
+   // -------------- Discrete Walk on a cubic lattice ------------
 
-   // ------- BACKUP -------
-   /*
-   int n_rw = 10000;       // number of random walks
-   int n_blocks = 100;   // number of blocks
-
-   vector<double> average_modulus_square_distance_per_block(n_blocks+1, 0.0);
-   //vector<double> average_walked_distance_per_block(n_blocks+1, 0.0);
-   //vector<double> average_squared_walked_distance_per_block(n_blocks+1, 0.0);
-
-   // Generic average values vectors to be used for error computations
-   vector<double> average_value(n_blocks+1, 0.0);           // <A>
-   vector<double> average_squared_value(n_blocks+1, 0.0);   // <A^2>
-   vector<double> average_value_squared(n_blocks+1, 0.0);   // <A>^2
-
-   vector<double> error(n_blocks+1, 0.0);
-
-   std::ofstream outputfile_random_walk("output_files/ex2_2_discrete_random_walk.dat");
-
-   if (!outputfile_random_walk.is_open()) 
-   {
-        std::cerr << "Error opening file!" << std::endl;
-        return 1;
-   }
-
-   outputfile_random_walk << "Steps taken, Average distance walked , error\n";
-
-   for (int i = 0; i <= n_blocks; i++)  // allow up to 100 steps
-   {
-      double sum_d_squared = 0.0;
-      double sum_d_squared_squared = 0.0;
-
-      for (int j = 0; j < n_rw; j++) 
-      {
-         int n_steps = i;
-
-         vector<int> position = {0,0,0};  // reset per walk
-         random_walk(position, rnd, n_steps);
-
-         double d_squared = walked_distance(position);
-         sum_d_squared  += d_squared;
-         sum_d_squared_squared += d_squared*d_squared;
-      }
-
-      average_modulus_square_distance_per_block[i] = sum_d_squared / n_rw;
-
-      average_value[i] = average_modulus_square_distance_per_block[i];
-      average_squared_value[i] = sum_d_squared_squared / n_rw;
-      average_value_squared[i] = average_value[i] * average_value[i];
-
-      //error[i] = sqrt(average_squared_value[i] - average_value_squared[i]);    // √ (<A^2> - <A>^2)
-
-      error[i] = sqrt( (average_squared_value[i] - average_value[i]*average_value[i]) / n_rw );
-      
-      double average_distance_walked = sqrt(average_modulus_square_distance_per_block[i]);
-
-      cout << "Block " << i << " -- steps taken: " << i << endl;
-      cout << "Average distance walked = " << average_distance_walked << endl;
-      cout << "---------------------------------------------" << endl;
-
-      outputfile_random_walk << i << ","  << average_distance_walked << ","
-                                          << error[i] << endl;
-
-   }
-   */
-
-   /*
-   // -------------- !!! KEEP FOR LATER COMPARAISON !!! Discrete Walk on a lattice --------------
-
-   int n_rw_experiments = 10000; // Number of random walks experiments
-   int n_max_steps = 100;        // Max number of steps
-
-   // Resetting average vectors to zero
-
-   fill(mean_r.begin(), mean_r.end(), 0);
-   fill(mean_rsquared.begin(), mean_rsquared.end(), 0);
-
-   vector<int> position(3); // a 3D vector for position
-
-   for (int i=0; i < n_max_steps; i++)
-   {
-
-      for (int j=0; j < n_rw_experiments; j++)
-      {
-         // For each new experiment, setting the initial position at the origin
-
-         position[0] = 0;
-         position[1] = 0;
-         position[2] = 0;
-
-         random_walk(position, rnd, i+1); // updating the position at each random step
-
-         mean_r[i] += walked_distance(position);
-      }
-
-      mean_r[i] /= n_rw_experiments;
-      mean_rsquared[i] = mean_r[i]*mean_r[i]; // --> WRONG ??
-
-      //average2_correct[i] += pow(walked_distance(position), 2); // accumulate r^2
-   }
-
-   outputfile = "output_files/ex2_2_discrete_random_walk.dat";
-   blocked_statistics(mean_r, mean_rsquared, n_max_steps, outputfile);
-
-   string outputfile_correct = "output_files/ex2_2_discrete_random_walk_correct.dat";
-   //blocked_statistics(average, average2_correct, n_max_steps, outputfile_correct);
-
-   */
-
-
+   simulate_discrete_random_walk(
+     rnd,
+     10000,                                  // total walks
+     100,                                    // number of groups
+     "output_files/ex2_2_discrete_random_walk.dat"
+   );
 
    // -------------- Continuous Walk on a sphere -----------------
+
+   simulate_continuous_random_walk(
+     rnd,
+     10000,                                  // n_walks_total
+     100,                                    // n_groups
+     "output_files/ex2_2_continuous_random_walk.dat"  // output file
+   );
 
 
    /*
