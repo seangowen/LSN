@@ -40,7 +40,7 @@ void continuous_random_walk_step(vector<double>& sphere_position, Random& rnd)
     // Update position
     sphere_position[0] += 10*sin(theta) * cos(phi);
     sphere_position[1] += 10*sin(theta) * sin(phi);
-    sphere_position[2] += cos(theta);
+    sphere_position[2] += 10*cos(theta);
 }
 
 
@@ -71,7 +71,7 @@ double walked_distance(vector<int> position)
 
 double continuous_walked_distance(vector<double> sphere_position)
 {
-	float distance = sqrt(sphere_position[0]*sphere_position[0] + sphere_position[1]*sphere_position[1] + sphere_position[2]*sphere_position[2]);
+	float distance = sphere_position[0]*sphere_position[0] + sphere_position[1]*sphere_position[1] + sphere_position[2]*sphere_position[2];
 
 	return distance;
 
