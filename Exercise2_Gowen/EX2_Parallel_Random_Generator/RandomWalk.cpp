@@ -72,9 +72,7 @@ double walked_distance(vector<int> position)
 double continuous_walked_distance(vector<double> sphere_position)
 {
 	float distance = sphere_position[0]*sphere_position[0] + sphere_position[1]*sphere_position[1] + sphere_position[2]*sphere_position[2];
-
 	return distance;
-
 }
 
 
