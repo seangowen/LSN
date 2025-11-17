@@ -60,7 +60,7 @@ int main()
     cout << "===============================" << endl;
 
     // Call Input to initialize RNG, read parameters (nspin, J, h, metro, nblk, nstep, restart,...)
-    // Use initial_condition "T=inf" so that if restart=="true" we generate random config (see your function)
+    // Use initial_condition "T=inf" so that if restart=="true" we generate random config
     Input("T=inf");
 
     // Set the actual temperature and beta now:
@@ -141,7 +141,7 @@ string GetOutputPrefix()
 
 
 
-// ---------------- ORIGINAL FUNCTIONS (unchanged logic) --------------------
+// ---------------- ORIGINAL FUNCTIONS --------------------
 
 void Input(string initial_condition)
 {
@@ -164,7 +164,6 @@ void Input(string initial_condition)
   rnd.SetRandom(seed,p1,p2);
   input.close();
   
-  //Read input informations
   ReadInput.open("input.dat");
 
   ReadInput >> temp;
